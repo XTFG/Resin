@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
-import { AlertTriangle, Eraser, Globe, RefreshCw, Sparkles, X, Zap } from "lucide-react";
+import { AlertTriangle, Eraser, Globe, Layers, RefreshCw, Sparkles, X, Zap } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useLocation } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
@@ -15,7 +15,7 @@ import { useToast } from "../../hooks/useToast";
 import { useI18n } from "../../i18n";
 import { formatApiErrorMessage } from "../../lib/error-message";
 import { formatDateTime, formatRelativeTime } from "../../lib/time";
-import { listPlatforms } from "../platforms/api";
+import { createPlatform, listPlatforms } from "../platforms/api";
 import type { Platform } from "../platforms/types";
 import { listSubscriptions } from "../subscriptions/api";
 import { getNode, listNodes, probeEgress, probeLatency } from "./api";
@@ -185,6 +185,14 @@ function firstTag(node: { display_tag?: string; tags: { tag: string }[] }): stri
     return "-";
   }
   return node.tags[0].tag;
+}
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function sanitizePlatformName(tag: string): string {
+  return "Node-" + tag.slice(0, 20).replace(/[.:|/\\@?#%~\s]+/g, "-").replace(/-+$/, "");
 }
 
 function hasReferenceLatency(node: NodeSummary): node is NodeSummary & { reference_latency_ms: number } {
@@ -416,6 +424,17 @@ export function NodesPage() {
     await probeLatencyMutation.mutateAsync(hash);
   };
 
+  const createDirectPlatformMutation = useMutation({
+    mutationFn: createPlatform,
+    onSuccess: async (created) => {
+      await queryClient.invalidateQueries({ queryKey: ["platforms"] });
+      showToast("success", t("已创建专属平台: {{name}}", { name: created.name }));
+    },
+    onError: (error) => {
+      showToast("error", formatApiErrorMessage(error, t));
+    },
+  });
+
   const handleFilterChange = (key: keyof NodeFilterDraft, value: string) => {
     setDraftFilters((prev) => {
       const next = { ...prev, [key]: value };
@@ -585,6 +604,22 @@ export function NodesPage() {
               disabled={probeEgressMutation.isPending || probeLatencyMutation.isPending}
             >
               <Zap size={14} />
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              title={t("创建专属平台路由")}
+              onClick={() => {
+                const tag = firstTag(node);
+                createDirectPlatformMutation.mutate({
+                  name: sanitizePlatformName(tag),
+                  regex_filters: [`^${escapeRegex(tag)}$`],
+                  allocation_policy: "BALANCED",
+                });
+              }}
+              disabled={createDirectPlatformMutation.isPending}
+            >
+              <Layers size={14} />
             </Button>
           </div>
         );

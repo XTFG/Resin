@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Info, Plus, RefreshCw, Search, Sparkles } from "lucide-react";
+import { AlertTriangle, Info, Link, Plus, RefreshCw, Search, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
@@ -38,6 +38,21 @@ const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
 const EMPTY_PLATFORMS: Platform[] = [];
 const PAGE_SIZE_OPTIONS = [12, 24, 48, 96] as const;
 
+function copyToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(text);
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textarea);
+  return Promise.resolve();
+}
+
 export function PlatformPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -45,6 +60,12 @@ export function PlatformPage() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState<number>(24);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [proxyHost, setProxyHost] = useState(() =>
+    localStorage.getItem("resin.webui.proxy_host") || `${window.location.hostname}:${window.location.port || "2260"}`
+  );
+  const [proxyToken, setProxyToken] = useState(() =>
+    localStorage.getItem("resin.webui.proxy_token") ?? ""
+  );
   const { toasts, showToast, dismissToast } = useToast();
 
   const queryClient = useQueryClient();
@@ -120,7 +141,28 @@ export function PlatformPage() {
             <h3>{t("平台列表")}</h3>
             <p>{t("共 {{count}} 个平台", { count: totalPlatforms })}</p>
           </div>
-          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}>
+              <Input
+                placeholder="Host:Port"
+                value={proxyHost}
+                onChange={(e) => {
+                  setProxyHost(e.target.value);
+                  localStorage.setItem("resin.webui.proxy_host", e.target.value);
+                }}
+                style={{ maxWidth: 170, padding: "6px 10px", borderRadius: 8, fontSize: "0.85rem" }}
+              />
+              <Input
+                placeholder="Proxy Token"
+                type="password"
+                value={proxyToken}
+                onChange={(e) => {
+                  setProxyToken(e.target.value);
+                  localStorage.setItem("resin.webui.proxy_token", e.target.value);
+                }}
+                style={{ maxWidth: 130, padding: "6px 10px", borderRadius: 8, fontSize: "0.85rem" }}
+              />
+            </div>
             <label className="search-box" htmlFor="platform-search" style={{ maxWidth: 200, margin: 0, gap: 6 }}>
               <Search size={16} />
               <Input
@@ -187,9 +229,35 @@ export function PlatformPage() {
               >
                 <div className="platform-tile-head">
                   <p>{platform.name}</p>
-                  <Badge variant={platform.id === ZERO_UUID ? "warning" : "success"}>
-                    {platform.id === ZERO_UUID ? t("内置平台") : t("自定义平台")}
-                  </Badge>
+                  <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                    <Badge variant={platform.id === ZERO_UUID ? "warning" : "success"}>
+                      {platform.id === ZERO_UUID ? t("内置平台") : t("自定义平台")}
+                    </Badge>
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      title={t("复制 HTTP 代理地址")}
+                      style={{ cursor: "pointer", padding: "2px 4px", borderRadius: 4, display: "inline-flex", alignItems: "center" }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const tokenPart = proxyToken || "";
+                        const url = `http://${platform.name}:${tokenPart}@${proxyHost}`;
+                        void copyToClipboard(url);
+                        showToast("success", t("已复制: {{url}}", { url }));
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.stopPropagation();
+                          const tokenPart = proxyToken || "";
+                          const url = `http://${platform.name}:${tokenPart}@${proxyHost}`;
+                          void copyToClipboard(url);
+                          showToast("success", t("已复制: {{url}}", { url }));
+                        }
+                      }}
+                    >
+                      <Link size={14} />
+                    </span>
+                  </span>
                 </div>
                 <div className="platform-tile-facts">
                   <span className="platform-fact">

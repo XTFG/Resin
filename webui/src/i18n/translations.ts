@@ -621,6 +621,10 @@ const EXACT_ZH_TO_EN: Record<string, string> = {
   "总请求": "Total requests",
   "最近错误：{{message}}": "Recent error: {{message}}",
   "配置已更新（{{count}} 项变更）": "Config updated ({{count}} changes)",
+  "复制 HTTP 代理地址": "Copy HTTP Proxy URL",
+  "已复制: {{url}}": "Copied: {{url}}",
+  "创建专属平台路由": "Create Dedicated Platform Route",
+  "已创建专属平台: {{name}}": "Dedicated platform created: {{name}}",
 };
 
 export function translateDocumentTitle(locale: AppLocale): string {
