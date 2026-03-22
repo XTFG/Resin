@@ -1,8 +1,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
-import { AlertTriangle, Eye, Filter, Info, Pencil, Plus, RefreshCw, Search, Sparkles, Trash2, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { AlertTriangle, Eye, Filter, Info, Pencil, Plus, RefreshCw, Search, Sparkles, Trash2, Upload, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 import { z } from "zod";
@@ -65,7 +65,28 @@ const subscriptionCreateSchema = z.object({
   }
 });
 
-const subscriptionEditSchema = subscriptionCreateSchema;
+const subscriptionEditSchema = z.object({
+  name: z.string().trim().min(1, "订阅名称不能为空"),
+  source_type: z.enum(["remote", "local"]),
+  url: z.string(),
+  content: z.string(),
+  update_interval: z.string().trim().min(1, "更新间隔不能为空"),
+  ephemeral_node_evict_delay: z.string().trim().min(1, "临时节点驱逐延迟不能为空"),
+  enabled: z.boolean(),
+  ephemeral: z.boolean(),
+}).superRefine((value, ctx) => {
+  if (value.source_type === "remote") {
+    const url = value.url.trim();
+    if (!url) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["url"], message: "URL 不能为空" });
+      return;
+    }
+    if (!(url.startsWith("http://") || url.startsWith("https://"))) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["url"], message: "URL 必须是 http/https 地址" });
+    }
+  }
+  // Edit form: content can be empty if subscription already has nodes (content stripped from API)
+});
 
 type SubscriptionCreateForm = z.infer<typeof subscriptionCreateSchema>;
 type SubscriptionEditForm = z.infer<typeof subscriptionEditSchema>;
@@ -184,6 +205,9 @@ export function SubscriptionPage() {
     },
   });
 
+  const createFileContentRef = useRef<string | null>(null);
+  const [createFileName, setCreateFileName] = useState<string | null>(null);
+  const [createFileLoading, setCreateFileLoading] = useState(false);
   const createEphemeral = createForm.watch("ephemeral");
   const createSourceType = createForm.watch("source_type");
 
@@ -201,6 +225,9 @@ export function SubscriptionPage() {
     },
   });
 
+  const editFileContentRef = useRef<string | null>(null);
+  const [editFileName, setEditFileName] = useState<string | null>(null);
+  const [editFileLoading, setEditFileLoading] = useState(false);
   const editEphemeral = editForm.watch("ephemeral");
   const editSourceType = editForm.watch("source_type");
 
@@ -243,6 +270,8 @@ export function SubscriptionPage() {
     onSuccess: async (created) => {
       await invalidateSubscriptions();
       setCreateModalOpen(false);
+      createFileContentRef.current = null;
+      setCreateFileName(null);
       createForm.reset({
         name: "",
         source_type: "remote",
@@ -253,7 +282,7 @@ export function SubscriptionPage() {
         enabled: true,
         ephemeral: false,
       });
-      showToast("success", t("订阅 {{name}} 创建成功", { name: created.name }));
+      showToast("success", t("订阅 {{name}} 创建成功，共导入 {{count}} 个节点", { name: created.name, count: created.node_count }));
     },
     onError: (error) => {
       showToast("error", formatApiErrorMessage(error, t));
@@ -266,6 +295,11 @@ export function SubscriptionPage() {
         throw new Error("请选择要编辑的订阅");
       }
 
+      const contentValue = editFileContentRef.current ?? formData.content;
+      const localContentPart: Record<string, string> = {};
+      if (formData.source_type === "local" && contentValue && contentValue.trim()) {
+        localContentPart.content = contentValue;
+      }
       const payload = {
         name: formData.name.trim(),
         update_interval: normalizeSubmitUpdateInterval(formData.source_type, formData.update_interval),
@@ -274,14 +308,14 @@ export function SubscriptionPage() {
         ephemeral: formData.ephemeral,
         ...(formData.source_type === "remote"
           ? { url: formData.url.trim() }
-          : { content: formData.content }),
+          : localContentPart),
       };
       return updateSubscription(selectedSubscription.id, payload);
     },
     onSuccess: async (updated) => {
       await invalidateSubscriptions();
       setSelectedSubscriptionId(updated.id);
-      showToast("success", t("订阅 {{name}} 已更新", { name: updated.name }));
+      showToast("success", t("订阅 {{name}} 已更新，当前 {{count}} 个节点", { name: updated.name, count: updated.node_count }));
     },
     onError: (error) => {
       showToast("error", formatApiErrorMessage(error, t));
@@ -343,6 +377,7 @@ export function SubscriptionPage() {
   });
 
   const onCreateSubmit = createForm.handleSubmit(async (values) => {
+    const contentValue = createFileContentRef.current ?? values.content;
     const payload = {
       name: values.name.trim(),
       source_type: values.source_type,
@@ -352,7 +387,7 @@ export function SubscriptionPage() {
       ephemeral: values.ephemeral,
       ...(values.source_type === "remote"
         ? { url: values.url.trim() }
-        : { content: values.content }),
+        : { content: contentValue }),
     };
     await createMutation.mutateAsync(payload);
   });
@@ -726,14 +761,77 @@ export function SubscriptionPage() {
                       <label className="field-label" htmlFor="edit-sub-content">
                         {t("订阅内容")}
                       </label>
-                      <Textarea
-                        id="edit-sub-content"
-                        rows={8}
-                        placeholder={subscriptionContentPlaceholder}
-                        invalid={Boolean(editForm.formState.errors.content)}
-                        {...editForm.register("content")}
-                      />
-                      {editForm.formState.errors.content?.message ? (
+                      {editFileName ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg-secondary)" }}>
+                          <Upload size={16} />
+                          <span style={{ flex: 1 }}>{editFileName}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              editFileContentRef.current = null;
+                              setEditFileName(null);
+                              editForm.setValue("content", "", { shouldValidate: true });
+                            }}
+                          >
+                            <X size={14} />
+                          </Button>
+                        </div>
+                      ) : !editForm.getValues("content") && selectedSubscription && selectedSubscription.node_count > 0 ? (
+                        <div style={{ padding: "12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg-secondary)", color: "var(--text-secondary)", fontSize: "0.875rem" }}>
+                          {t("已有 {{count}} 个节点（内容由服务端管理，如需替换请上传新文件）", { count: selectedSubscription.node_count })}
+                        </div>
+                      ) : (
+                        <Textarea
+                          id="edit-sub-content"
+                          rows={8}
+                          placeholder={subscriptionContentPlaceholder}
+                          invalid={Boolean(editForm.formState.errors.content)}
+                          {...editForm.register("content")}
+                        />
+                      )}
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: 4 }}>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          disabled={editFileLoading}
+                          onClick={() => {
+                            const input = document.createElement("input");
+                            input.type = "file";
+                            input.accept = ".yaml,.yml,.json,.txt,.conf,.toml,.b64";
+                            input.onchange = () => {
+                              const file = input.files?.[0];
+                              if (!file) return;
+                              setEditFileLoading(true);
+                              const reader = new FileReader();
+                              reader.onload = () => {
+                                const text = reader.result as string;
+                                editFileContentRef.current = text;
+                                editForm.setValue("content", "__file__", { shouldValidate: true });
+                                const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+                                setEditFileName(`${file.name} (${sizeMB} MB)`);
+                                setEditFileLoading(false);
+                                showToast("success", t("已加载文件: {{name}} ({{size}})", { name: file.name, size: sizeMB + " MB" }));
+                              };
+                              reader.onerror = () => {
+                                setEditFileLoading(false);
+                                showToast("error", t("文件读取失败"));
+                              };
+                              reader.readAsText(file);
+                            };
+                            input.click();
+                          }}
+                        >
+                          <Upload size={14} />
+                          {editFileLoading ? t("读取中...") : t("上传文件")}
+                        </Button>
+                        <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                          {t("支持 YAML / JSON / URI / Base64 格式")}
+                        </span>
+                      </div>
+                      {editForm.formState.errors.content?.message && !editFileName ? (
                         <p className="field-error">{t(editForm.formState.errors.content.message)}</p>
                       ) : null}
                     </div>
@@ -937,14 +1035,73 @@ export function SubscriptionPage() {
                   <label className="field-label" htmlFor="create-sub-content">
                     {t("订阅内容")}
                   </label>
-                  <Textarea
-                    id="create-sub-content"
-                    rows={8}
-                    placeholder={subscriptionContentPlaceholder}
-                    invalid={Boolean(createForm.formState.errors.content)}
-                    {...createForm.register("content")}
-                  />
-                  {createForm.formState.errors.content?.message ? (
+                  {createFileName ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg-secondary)" }}>
+                      <Upload size={16} />
+                      <span style={{ flex: 1 }}>{createFileName}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          createFileContentRef.current = null;
+                          setCreateFileName(null);
+                          createForm.setValue("content", "", { shouldValidate: true });
+                        }}
+                      >
+                        <X size={14} />
+                      </Button>
+                    </div>
+                  ) : (
+                    <Textarea
+                      id="create-sub-content"
+                      rows={8}
+                      placeholder={subscriptionContentPlaceholder}
+                      invalid={Boolean(createForm.formState.errors.content)}
+                      {...createForm.register("content")}
+                    />
+                  )}
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: 4 }}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      disabled={createFileLoading}
+                      onClick={() => {
+                        const input = document.createElement("input");
+                        input.type = "file";
+                        input.accept = ".yaml,.yml,.json,.txt,.conf,.toml,.b64";
+                        input.onchange = () => {
+                          const file = input.files?.[0];
+                          if (!file) return;
+                          setCreateFileLoading(true);
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            const text = reader.result as string;
+                            createFileContentRef.current = text;
+                            createForm.setValue("content", "__file__", { shouldValidate: true });
+                            const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+                            setCreateFileName(`${file.name} (${sizeMB} MB)`);
+                            setCreateFileLoading(false);
+                            showToast("success", t("已加载文件: {{name}} ({{size}})", { name: file.name, size: sizeMB + " MB" }));
+                          };
+                          reader.onerror = () => {
+                            setCreateFileLoading(false);
+                            showToast("error", t("文件读取失败"));
+                          };
+                          reader.readAsText(file);
+                        };
+                        input.click();
+                      }}
+                    >
+                      <Upload size={14} />
+                      {createFileLoading ? t("读取中...") : t("上传文件")}
+                    </Button>
+                    <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                      {t("支持 YAML / JSON / URI / Base64 格式")}
+                    </span>
+                  </div>
+                  {createForm.formState.errors.content?.message && !createFileName ? (
                     <p className="field-error">{t(createForm.formState.errors.content.message)}</p>
                   ) : null}
                 </div>
@@ -1002,8 +1159,8 @@ export function SubscriptionPage() {
               </div>
 
               <div className="detail-actions" style={{ justifyContent: "flex-end" }}>
-                <Button type="submit" disabled={createMutation.isPending}>
-                  {createMutation.isPending ? t("创建中...") : t("确认创建")}
+                <Button type="submit" disabled={createMutation.isPending || createFileLoading}>
+                  {createMutation.isPending ? (createFileContentRef.current ? t("正在提交大文件，请稍候...") : t("创建中...")) : t("确认创建")}
                 </Button>
                 <Button variant="secondary" onClick={() => setCreateModalOpen(false)}>
                   {t("取消")}

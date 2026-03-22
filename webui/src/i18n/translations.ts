@@ -621,6 +621,15 @@ const EXACT_ZH_TO_EN: Record<string, string> = {
   "总请求": "Total requests",
   "最近错误：{{message}}": "Recent error: {{message}}",
   "配置已更新（{{count}} 项变更）": "Config updated ({{count}} changes)",
+  "上传文件": "Upload File",
+  "已加载文件: {{name}} ({{size}})": "File loaded: {{name}} ({{size}})",
+  "文件读取失败": "Failed to read file",
+  "支持 YAML / JSON / URI / Base64 格式": "Supports YAML / JSON / URI / Base64 formats",
+  "读取中...": "Reading...",
+  "正在提交大文件，请稍候...": "Submitting large file, please wait...",
+  "订阅 {{name}} 创建成功，共导入 {{count}} 个节点": "Subscription {{name}} created, {{count}} nodes imported",
+  "订阅 {{name}} 已更新，当前 {{count}} 个节点": "Subscription {{name}} updated, {{count}} nodes",
+  "已有 {{count}} 个节点（内容由服务端管理，如需替换请上传新文件）": "{{count}} nodes loaded (content managed by server, upload a new file to replace)",
 };
 
 export function translateDocumentTitle(locale: AppLocale): string {
