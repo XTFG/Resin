@@ -45,6 +45,7 @@ export function PlatformPage() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState<number>(24);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [regexHelpOpen, setRegexHelpOpen] = useState(false);
   const { toasts, showToast, dismissToast } = useToast();
 
   const queryClient = useQueryClient();
@@ -324,9 +325,12 @@ export function PlatformPage() {
                   <span>{t("节点名正则过滤规则（可选）")}</span>
                   <span
                     className="subscription-info-icon"
-                    title={t("满足所有正则表达式的节点才会被选择")}
-                    aria-label={t("满足所有正则表达式的节点才会被选择")}
+                    role="button"
                     tabIndex={0}
+                    style={{ cursor: "pointer" }}
+                    onClick={() => setRegexHelpOpen(true)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setRegexHelpOpen(true); }}
+                    aria-label={t("正则过滤说明")}
                   >
                     <Info size={13} />
                   </span>
@@ -337,9 +341,6 @@ export function PlatformPage() {
                   placeholder={t("每行一条，例如 .*专线.* 或 <订阅名>/.*")}
                   {...createForm.register("regex_filters_text")}
                 />
-                <p className="muted" style={{ marginTop: 4, fontSize: 12 }}>
-                  {t("技巧：<订阅名>/.* 可筛选来自该订阅的节点。")}
-                </p>
               </div>
 
               <div className="field-group">
@@ -358,6 +359,39 @@ export function PlatformPage() {
                 </Button>
               </div>
             </form>
+          </Card>
+        </div>
+      ) : null}
+
+      {regexHelpOpen ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => setRegexHelpOpen(false)}>
+          <Card className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+            <div className="modal-header">
+              <h3>{t("正则过滤说明")}</h3>
+              <Button variant="ghost" size="sm" onClick={() => setRegexHelpOpen(false)}>
+                {t("关闭")}
+              </Button>
+            </div>
+            <div style={{ padding: "0 1.25rem 1.25rem", fontSize: "0.875rem", lineHeight: 1.7 }}>
+              <p><strong>{t("节点标签格式：<订阅名>/<节点名>")}</strong></p>
+              <p style={{ color: "var(--danger)" }}>{t("多行正则为 AND 关系（节点须同时满足所有规则）")}</p>
+              <h4 style={{ marginTop: "1rem", marginBottom: "0.5rem" }}>{t("常见用法")}</h4>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8125rem" }}>
+                <tbody>
+                  {[
+                    ["my_sub/.*", t("匹配整个订阅的所有节点")],
+                    ["(sub1|sub2)/.*", t("匹配多个订阅的节点")],
+                    [".*/.*香港.*", t("匹配名称含关键词的节点")],
+                    ["^sub/exact-node$", t("精确匹配某个节点")],
+                  ].map(([pattern, desc]) => (
+                    <tr key={pattern} style={{ borderBottom: "1px solid var(--border)" }}>
+                      <td style={{ padding: "6px 8px", fontFamily: "monospace", whiteSpace: "nowrap" }}>{pattern}</td>
+                      <td style={{ padding: "6px 8px", color: "var(--text-secondary)" }}>{desc}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </Card>
         </div>
       ) : null}
