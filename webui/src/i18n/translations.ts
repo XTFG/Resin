@@ -634,6 +634,14 @@ const EXACT_ZH_TO_EN: Record<string, string> = {
   "订阅 {{name}} 创建成功，共导入 {{count}} 个节点": "Subscription {{name}} created, {{count}} nodes imported",
   "订阅 {{name}} 已更新，当前 {{count}} 个节点": "Subscription {{name}} updated, {{count}} nodes",
   "已有 {{count}} 个节点（内容由服务端管理，如需替换请上传新文件）": "{{count}} nodes loaded (content managed by server, upload a new file to replace)",
+  "正则过滤说明": "Regex Filter Guide",
+  "节点标签格式：<订阅名>/<节点名>": "Node tag format: <SubscriptionName>/<NodeName>",
+  "多行正则为 AND 关系（节点须同时满足所有规则）": "Multiple regex lines use AND logic (node must match ALL rules)",
+  "常见用法": "Common patterns",
+  "匹配整个订阅的所有节点": "Match all nodes from a subscription",
+  "匹配多个订阅的节点": "Match nodes from multiple subscriptions",
+  "匹配名称含关键词的节点": "Match nodes whose name contains a keyword",
+  "精确匹配某个节点": "Match a specific node exactly",
 };
 
 export function translateDocumentTitle(locale: AppLocale): string {
