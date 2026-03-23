@@ -1,0 +1,17 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+
+run:
+  build-tags:
+    - with_quic
+    - with_wireguard
+    - with_grpc
+    - with_utls

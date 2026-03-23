@@ -87,13 +87,17 @@ func (s *ControlPlaneService) subToResponse(sub *subscription.Subscription) Subs
 }
 
 // ListSubscriptions returns all subscriptions, optionally filtered by enabled.
+// Content is omitted from list responses to avoid transferring large local
+// subscription bodies on every poll.
 func (s *ControlPlaneService) ListSubscriptions(enabled *bool) ([]SubscriptionResponse, error) {
 	var result []SubscriptionResponse
 	s.SubMgr.Range(func(id string, sub *subscription.Subscription) bool {
 		if enabled != nil && sub.Enabled() != *enabled {
 			return true
 		}
-		result = append(result, s.subToResponse(sub))
+		resp := s.subToResponse(sub)
+		resp.Content = ""
+		result = append(result, resp)
 		return true
 	})
 	if result == nil {
@@ -240,6 +244,7 @@ func (s *ControlPlaneService) CreateSubscription(req CreateSubscriptionRequest) 
 	s.SubMgr.Register(sub)
 
 	r := s.subToResponse(sub)
+	r.Content = ""
 	return &r, nil
 }
 
@@ -384,6 +389,7 @@ func (s *ControlPlaneService) UpdateSubscription(id string, patchJSON json.RawMe
 	}
 
 	r := s.subToResponse(sub)
+	r.Content = ""
 	return &r, nil
 }
 
