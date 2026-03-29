@@ -111,3 +111,12 @@ export async function clearAllPlatformLeases(id: string): Promise<void> {
     method: "DELETE",
   });
 }
+
+export type WebUIHints = {
+  proxy_host: string;
+  proxy_token: string;
+};
+
+export async function fetchWebUIHints(): Promise<WebUIHints> {
+  return apiRequest<WebUIHints>("/api/v1/webui/hints");
+}

@@ -57,6 +57,9 @@ type EnvConfig struct {
 	AdminToken  string
 	ProxyToken  string
 
+	// WebUI hints (pre-filled defaults for the frontend)
+	WebUIDefaultProxyHost string
+
 	// Metrics
 	MetricThroughputIntervalSeconds   int
 	MetricThroughputRetentionSeconds  int
@@ -128,6 +131,9 @@ func LoadEnvConfig() (*EnvConfig, error) {
 	cfg.AuthVersion = NormalizeAuthVersion(authVersionRaw)
 	cfg.AdminToken = adminToken
 	cfg.ProxyToken = proxyToken
+
+	// --- WebUI hints ---
+	cfg.WebUIDefaultProxyHost = strings.TrimSpace(envStr("RESIN_WEBUI_DEFAULT_PROXY_HOST", ""))
 
 	// --- Metrics ---
 	cfg.MetricThroughputIntervalSeconds = envInt("RESIN_METRIC_THROUGHPUT_INTERVAL_SECONDS", 2, &errs)

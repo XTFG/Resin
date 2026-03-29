@@ -70,6 +70,7 @@ func NewServerWithAddress(
 	authed.Handle("GET /api/v1/system/config", HandleSystemConfig(runtimeCfg))
 	authed.Handle("GET /api/v1/system/config/default", HandleSystemDefaultConfig())
 	authed.Handle("GET /api/v1/system/config/env", HandleSystemEnvConfig(envCfg))
+	authed.Handle("GET /api/v1/webui/hints", HandleWebUIHints(envCfg))
 
 	if cp != nil {
 		// System config mutations.

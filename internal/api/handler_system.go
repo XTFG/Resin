@@ -98,6 +98,26 @@ func HandlePatchSystemConfig(cp *service.ControlPlaneService) http.HandlerFunc {
 	}
 }
 
+// webuiHintsResponse is the payload for GET /api/v1/webui/hints.
+type webuiHintsResponse struct {
+	ProxyHost  string `json:"proxy_host"`
+	ProxyToken string `json:"proxy_token"`
+}
+
+// HandleWebUIHints returns a handler for GET /api/v1/webui/hints.
+// It exposes server-side defaults so the WebUI can pre-fill fields
+// without manual input after every redeployment.
+func HandleWebUIHints(envCfg *config.EnvConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		resp := webuiHintsResponse{}
+		if envCfg != nil {
+			resp.ProxyHost = envCfg.WebUIDefaultProxyHost
+			resp.ProxyToken = envCfg.ProxyToken
+		}
+		WriteJSON(w, http.StatusOK, resp)
+	}
+}
+
 func systemEnvConfigSnapshot(envCfg *config.EnvConfig) *systemEnvConfigResponse {
 	if envCfg == nil {
 		return nil

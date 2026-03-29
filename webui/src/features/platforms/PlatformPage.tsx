@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Info, Link, Plus, RefreshCw, Search, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "../../components/ui/Badge";
@@ -16,7 +16,7 @@ import { useToast } from "../../hooks/useToast";
 import { useI18n } from "../../i18n";
 import { formatApiErrorMessage } from "../../lib/error-message";
 import { formatGoDuration, formatRelativeTime } from "../../lib/time";
-import { createPlatform, listPlatforms } from "./api";
+import { createPlatform, fetchWebUIHints, listPlatforms } from "./api";
 import {
   allocationPolicies,
   allocationPolicyLabel,
@@ -67,6 +67,27 @@ export function PlatformPage() {
     localStorage.getItem("resin.webui.proxy_token") ?? ""
   );
   const [regexHelpOpen, setRegexHelpOpen] = useState(false);
+
+  // Load server-side hints to pre-fill proxy_host / proxy_token when localStorage has no user-saved value.
+  useEffect(() => {
+    const savedHost = localStorage.getItem("resin.webui.proxy_host");
+    const savedToken = localStorage.getItem("resin.webui.proxy_token");
+    if (savedHost && savedToken) return; // user already configured both
+    fetchWebUIHints()
+      .then((hints) => {
+        if (!savedHost && hints.proxy_host) {
+          setProxyHost(hints.proxy_host);
+          localStorage.setItem("resin.webui.proxy_host", hints.proxy_host);
+        }
+        if (!savedToken && hints.proxy_token) {
+          setProxyToken(hints.proxy_token);
+          localStorage.setItem("resin.webui.proxy_token", hints.proxy_token);
+        }
+      })
+      .catch(() => {
+        // hints are best-effort; ignore failures
+      });
+  }, []);
   const { toasts, showToast, dismissToast } = useToast();
 
   const queryClient = useQueryClient();
