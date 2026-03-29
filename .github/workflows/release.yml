@@ -3,7 +3,18 @@ name: Release
 on:
   push:
     tags:
-      - 'v*' # Trigger on tags starting with v, e.g., v1.0.0, v1.0.0-rc.1
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Version tag (e.g. v1.0.0)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: release-${{ github.ref }}
@@ -53,8 +64,9 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: |
-          VERSION=${GITHUB_REF_NAME}
+          VERSION=${RELEASE_TAG}
           GIT_COMMIT=${GITHUB_SHA::8}
           BUILD_TIME=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
           
@@ -75,7 +87,6 @@ jobs:
             
           cd build
           
-          # Create a copy with the simple name for the archive
           SIMPLE_NAME="resin"
           if [ "$GOOS" = "windows" ]; then
             SIMPLE_NAME="resin.exe"
@@ -90,7 +101,6 @@ jobs:
             PACKAGE_NAME="resin-${GOOS}-${GOARCH}.tar.gz"
           fi
           
-          # Remove simple name copy to avoid confusion
           rm ${SIMPLE_NAME}
           echo "PACKAGE_NAME=${PACKAGE_NAME}" >> $GITHUB_ENV
 
@@ -125,8 +135,12 @@ jobs:
 
       - name: Check if Pre-release
         id: check_prerelease
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: |
-          if [[ "${GITHUB_REF_NAME}" == *"-"* ]]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "is_prerelease=${{ inputs.prerelease }}" >> $GITHUB_OUTPUT
+          elif [[ "${RELEASE_TAG}" == *"-"* ]]; then
             echo "is_prerelease=true" >> $GITHUB_OUTPUT
           else
             echo "is_prerelease=false" >> $GITHUB_OUTPUT
@@ -135,6 +149,7 @@ jobs:
       - name: Publish Release Assets
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           files: build/*
           fail_on_unmatched_files: true
           overwrite_files: true
@@ -183,8 +198,12 @@ jobs:
 
       - name: Check if Pre-release
         id: check_prerelease
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: |
-          if [[ "${GITHUB_REF_NAME}" == *"-"* ]]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "is_prerelease=${{ inputs.prerelease }}" >> $GITHUB_OUTPUT
+          elif [[ "${RELEASE_TAG}" == *"-"* ]]; then
             echo "is_prerelease=true" >> $GITHUB_OUTPUT
           else
             echo "is_prerelease=false" >> $GITHUB_OUTPUT
@@ -196,8 +215,8 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{version}},value=${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
             type=raw,value=latest,enable=${{ steps.check_prerelease.outputs.is_prerelease == 'false' }}
 
       - name: Build and push Docker image
